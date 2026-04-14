@@ -1,4 +1,4 @@
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <image_transport/image_transport.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <cv_bridge/cv_bridge.h>
@@ -46,26 +46,22 @@ void writeData(const string filename, const float x, const float y, uint mode) {
     outfile << float2str(x) << "        " << float2str(y) << endl;
 }
 
-void getParameters() {
+void getParameters(std::shared_ptr<rclcpp::Node> node) {
     cout << "Get the parameters from the launch file" << endl;
 
-    if (!ros::param::get("input_photo_path", photo_path)) {
-        cout << "Can not get the value of input_photo_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("ouput_path", output_name)) {
-        cout << "Can not get the value of ouput_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("intrinsic_path", intrinsic_path)) {
-        cout << "Can not get the value of intrinsic_path" << endl;
-        exit(1);
-    }
+    node->declare_parameter<std::string>("input_photo_path", "");
+    node->declare_parameter<std::string>("ouput_path", "");
+    node->declare_parameter<std::string>("intrinsic_path", "");
+
+    node->get_parameter("input_photo_path", photo_path);
+    node->get_parameter("ouput_path", output_name);
+    node->get_parameter("intrinsic_path", intrinsic_path);
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "cornerPhoto");
-    getParameters();
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("cornerPhoto");
+    getParameters(node);
 
     src_img = cv::imread(photo_path);
 
@@ -140,12 +136,6 @@ int main(int argc, char **argv) {
     cv::namedWindow("output");
     imshow("output", result_img);
     cv::waitKey(0);
+    rclcpp::shutdown();
     return 0;
 }
-
-
-
-
-
-
-

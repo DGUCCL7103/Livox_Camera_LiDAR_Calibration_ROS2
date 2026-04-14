@@ -1,4 +1,4 @@
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <iostream>
 #include <ceres/ceres.h>
 #include <Eigen/Core>
@@ -21,7 +21,7 @@ string lidar_path, photo_path, intrinsic_path, extrinsic_path;
 int error_threshold;
 vector<float> init;
 
-void getParameters();
+void getParameters(std::shared_ptr<rclcpp::Node> node);
 
 class external_cali {
 public:
@@ -55,39 +55,30 @@ private:
 
 };
 
-void getParameters() {
+void getParameters(std::shared_ptr<rclcpp::Node> node) {
     cout << "Get the parameters from the launch file" << endl;
 
-    if (!ros::param::get("input_lidar_path", lidar_path)) {
-        cout << "Can not get the value of input_lidar_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("input_photo_path", photo_path)) {
-        cout << "Can not get the value of input_photo_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("intrinsic_path", intrinsic_path)) {
-        cout << "Can not get the value of intrinsic_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("extrinsic_path", extrinsic_path)) {
-        cout << "Can not get the value of extrinsic_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("error_threshold", error_threshold)) {
-        cout << "Can not get the value of error_threshold" << endl;
-        exit(1);
-    }
-    init.resize(12);
-    if (!ros::param::get("init_value", init)) {
-        cout << "Can not get the value of init_value" << endl;
-        exit(1);
-    }
+    node->declare_parameter<std::string>("input_lidar_path", "");
+    node->declare_parameter<std::string>("input_photo_path", "");
+    node->declare_parameter<std::string>("intrinsic_path", "");
+    node->declare_parameter<std::string>("extrinsic_path", "");
+    node->declare_parameter<int>("error_threshold", 0);
+    node->declare_parameter<std::vector<double>>("init_value", std::vector<double>(12, 0.0));
+
+    node->get_parameter("input_lidar_path", lidar_path);
+    node->get_parameter("input_photo_path", photo_path);
+    node->get_parameter("intrinsic_path", intrinsic_path);
+    node->get_parameter("extrinsic_path", extrinsic_path);
+    node->get_parameter("error_threshold", error_threshold);
+    std::vector<double> init_double;
+    node->get_parameter("init_value", init_double);
+    init.assign(init_double.begin(), init_double.end());
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "getExt1");
-    getParameters();
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("getExt1");
+    getParameters(node);
 
     vector<PnPData> pData;
     getData(lidar_path, photo_path, pData);
@@ -159,7 +150,6 @@ int main(int argc, char **argv) {
         cout << endl << "The reprojection error bigger than the threshold, extrinsic result seems not ok" << endl;
     }
 
+    rclcpp::shutdown();
     return 0;  
 }
-
-

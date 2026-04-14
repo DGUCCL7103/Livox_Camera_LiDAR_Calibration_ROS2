@@ -197,7 +197,7 @@ int main(int argc, char **argv) {
             cloud->height = 1;
             cloud->width = lidar_datas[num].point_num; // get the point number of lidar data
             cloud->points.resize(cloud->width);
-            for(uint64_t i = 0; i < cloud->points.size() && n.ok(); ++i) {
+            for(uint64_t i = 0; i < cloud->points.size() && rclcpp::ok(); ++i) {
                 float x = lidar_datas[num].points[i].x;
                 float y = lidar_datas[num].points[i].y;
                 float z = lidar_datas[num].points[i].z;

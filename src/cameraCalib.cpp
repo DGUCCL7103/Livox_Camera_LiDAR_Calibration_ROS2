@@ -3,7 +3,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <fstream>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -16,43 +16,30 @@ using namespace std;
 string camera_in_path, camera_folder_path, result_path;
 int row_number, col_number, width, height;
 
-void getParameters() {
+void getParameters(std::shared_ptr<rclcpp::Node> node) {
     cout << "Get the parameters from the launch file" << endl;
 
-    if (!ros::param::get("camera_in_path", camera_in_path)) {
-        cout << "Can not get the value of camera_in_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("camera_folder_path", camera_folder_path)) {
-        cout << "Can not get the value of camera_folder_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("result_path", result_path)) {
-        cout << "Can not get the value of result_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("row_number", row_number)) {
-        cout << "Can not get the value of row_number" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("col_number", col_number)) {
-        cout << "Can not get the value of col_number" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("width", width)) {
-        cout << "Can not get the value of width" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("height", height)) {
-        cout << "Can not get the value of height" << endl;
-        exit(1);
-    }
+    node->declare_parameter<std::string>("camera_in_path", "data/camera/in.txt");
+    node->declare_parameter<std::string>("camera_folder_path", "data/camera/photos/");
+    node->declare_parameter<std::string>("result_path", "data/camera/result.txt");
+    node->declare_parameter<int>("row_number", 0);
+    node->declare_parameter<int>("col_number", 0);
+    node->declare_parameter<int>("width", 0);
+    node->declare_parameter<int>("height", 0);
 
+    node->get_parameter("camera_in_path", camera_in_path);
+    node->get_parameter("camera_folder_path", camera_folder_path);
+    node->get_parameter("result_path", result_path);
+    node->get_parameter("row_number", row_number);
+    node->get_parameter("col_number", col_number);
+    node->get_parameter("width", width);
+    node->get_parameter("height", height);
 }
 
 int main(int argc, char **argv) {
-	ros::init(argc, argv, "cameraCalib");
-	getParameters();
+	rclcpp::init(argc, argv);
+	auto node = std::make_shared<rclcpp::Node>("cameraCalib");
+	getParameters(node);
 
 	ifstream fin(camera_in_path);   /* 标定所用图像文件的路径 */
 	ofstream fout(result_path);    /* 保存标定结果的文件 */
@@ -198,5 +185,6 @@ int main(int argc, char **argv) {
 
 	fin.close();
 	fout.close();
+	rclcpp::shutdown();
 	return 0;
 }
