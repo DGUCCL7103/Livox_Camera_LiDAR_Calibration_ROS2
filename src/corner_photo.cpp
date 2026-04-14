@@ -18,6 +18,25 @@ void writeData(const string filename, const float x, const float y, uint mode);
 cv::Mat gray_img, src_img;
 cv::RNG  random_number_generator;
 string photo_path, output_name, intrinsic_path;
+vector<cv::Point2f> corners;
+cv::Mat display_img;
+
+static void onMouse(int event, int x, int y, int flags, void* userdata) {
+    if (event == cv::EVENT_LBUTTONDOWN) {
+        if (corners.size() < 4) {
+            corners.push_back(cv::Point2f(x, y));
+            cout << "Corner " << corners.size() << " clicked: (" << x << ", " << y << ")" << endl;
+            // 클릭한 위치에 빨간색 점 그리기
+            cv::circle(display_img, cv::Point(x, y), 5, cv::Scalar(0, 0, 255), -1);
+            cv::imshow("source", display_img);
+            if (corners.size() == 4) {
+                cout << "4 corners selected! Press any key in the image window to confirm and process." << endl;
+            }
+        } else {
+            cout << "Already selected 4 corners. Press any key in the image window to process." << endl;
+        }
+    }
+}
 
 void writeData(const string filename, const float x, const float y, uint mode) {
     ofstream outfile(filename.c_str(), ios_base::app);
@@ -95,25 +114,29 @@ int main(int argc, char **argv) {
     cv::initUndistortRectifyMap(cameraMatrix, distCoeffs, cv::Mat(),cv::getOptimalNewCameraMatrix(cameraMatrix, distCoeffs, imageSize, 1, imageSize, 0), imageSize, CV_16SC2, map1, map2);
     cv::remap(src_img, src_img, map1, map2, cv::INTER_LINEAR);  // correct the distortion
 
-    cout << "Please note the four corners, and then tap a random key to give the coordinate" << endl;
-    // cv::namedWindow("source", CV_WINDOW_KEEPRATIO);
-    cv::namedWindow("source");
-    cv::imshow("source", src_img);
-    cv::waitKey(0);
-    
-    cv::destroyWindow("source");
-    vector<cv::Point2f> corners;
-    cout << "Give the corner coordinate, finish by 0 0" << endl;
-    while(1) {
-        cv::Point2f p;
-        cin >> p.x >> p.y;
-        if(p.x < 0.1 && p.y < 0.1) {  // finish by typing "0 0"
-            break;
-        }
-        corners.push_back(p);
+    cout << "==========================================================" << endl;
+    cout << "Please click the FOUR corners on the image directly." << endl;
+    cout << "Order: Top-Left -> Bottom-Left -> Bottom-Right -> Top-Right" << endl;
+    cout << "==========================================================" << endl;
+
+    display_img = src_img.clone();
+    cv::namedWindow("source", cv::WINDOW_NORMAL);
+    cv::resizeWindow("source", 1280, 720); // 화면에 맞게 창 크기 설정
+    cv::setMouseCallback("source", onMouse, nullptr);
+    cv::imshow("source", display_img);
+
+    while (corners.size() < 4) {
+        if (cv::waitKey(10) == 27) break; // ESC 키를 누르면 강제 종료
     }
-    if (!corners.size()) {
-        cout << "No input corners, end process" << endl;
+    
+    if (corners.size() == 4) {
+        cv::waitKey(0); // 4개 클릭 후 아무 키나 누르기 대기
+    }
+    cv::destroyWindow("source");
+
+    if (corners.size() < 4) {
+        cout << "Not enough corners selected. Process ended." << endl;
+        rclcpp::shutdown();
         return 0;
     }
     cv::Size winSize = cv::Size(5, 5);
@@ -133,7 +156,8 @@ int main(int argc, char **argv) {
     }
     
     cout << endl << "Result saved, tap a random key to finish the process" << endl;
-    cv::namedWindow("output");
+    cv::namedWindow("output", cv::WINDOW_NORMAL);
+    cv::resizeWindow("output", 1280, 720);
     imshow("output", result_img);
     cv::waitKey(0);
     rclcpp::shutdown();

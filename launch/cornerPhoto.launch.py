@@ -8,7 +8,7 @@ def generate_launch_description():
             executable='cornerPhoto',
             output='screen',
             parameters=[{
-                'input_photo_path': 'data/photo/0.bmp',
+                'input_photo_path': 'data/photo/0.png',
                 'ouput_path': 'data/corner_photo.txt',
                 'intrinsic_path': 'data/parameters/intrinsic.txt'
             }]

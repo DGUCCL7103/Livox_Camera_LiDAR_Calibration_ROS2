@@ -1,8 +1,9 @@
-.vscode
-# ROS 2 workspace directories
+# ROS 2 workspace & Data directories (Ignore globally)
 build/
 install/
 log/
+data/
+
 
 # CMake / Colcon artifacts
 CMakeCache.txt
@@ -26,9 +27,3 @@ CTestTestfile.cmake
 .idea/
 *.swp
 *~
-
-# Calibration Data (Uncomment if you want to ignore large data files)
-# data/lidar/*.db3
-# data/pcdFiles/*.pcd
-
-*/build/
