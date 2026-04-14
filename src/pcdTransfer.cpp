@@ -8,6 +8,7 @@
 #include <rclcpp/serialization.hpp>
 #include <rclcpp/serialized_message.hpp>
 #include <pcl_conversions/pcl_conversions.h>
+#include <filesystem>
 #include <time.h>
 
 #include <livox_ros_driver2/msg/custom_msg.hpp>
@@ -33,12 +34,6 @@ void dataSave(int index);
 
 void loadAndSavePointcloud(int index) {
     string path = input_bag_path + int2str(index) + ".bag";
-    fstream file_;
-    file_.open(path, ios::in);
-    if (!file_) {
-        cout << "File " << path << " does not exit" << endl;
-        return;
-    }
     RCLCPP_INFO(rclcpp::get_logger("pcdTransfer"), "Start to load the rosbag %s", path.c_str());
     rosbag2_cpp::Reader reader;
     try {
@@ -49,7 +44,6 @@ void loadAndSavePointcloud(int index) {
     }
 
     rclcpp::Serialization<livox_ros_driver2::msg::CustomMsg> serialization;
-    int cloudCount = 0;
     while (reader.has_next()) {
         auto bag_message = reader.read_next();
         
@@ -69,8 +63,7 @@ void loadAndSavePointcloud(int index) {
 
             vector_data.push_back(myPoint);
         }
-        ++cloudCount;
-        if (cloudCount >= threshold_lidar) {
+        if (vector_data.size() >= static_cast<size_t>(threshold_lidar)) {
             break;
         }
     }
@@ -79,7 +72,7 @@ void loadAndSavePointcloud(int index) {
 }
 
 void writeTitle(const string filename, unsigned long point_num) {
-    ofstream outfile(filename.c_str(), ios_base::app);
+    ofstream outfile(filename.c_str(), ios_base::out);
     if (!outfile) {
         cout << "Can not open the file: " << filename << endl;
         exit(0);
@@ -114,6 +107,9 @@ void writePointCloud(const string filename, const vector<pointData> singlePCD) {
 }
 
 void dataSave(int index) {
+    if (!std::filesystem::exists(output_path)) {
+        std::filesystem::create_directories(output_path);
+    }
     string outputName = output_path + int2str(index) + ".pcd";
     writeTitle(outputName, vector_data.size());
     writePointCloud(outputName, vector_data);

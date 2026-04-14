@@ -83,6 +83,13 @@ int main(int argc, char **argv) {
     vector<PnPData> pData;
     getData(lidar_path, photo_path, pData);
 
+    if (pData.empty()) {
+        cout << "Error: No data points loaded. Please check if the lidar and photo files exist and are not empty." << endl;
+        cout << "lidar_path: " << lidar_path << "\nphoto_path: " << photo_path << endl;
+        rclcpp::shutdown();
+        return 1;
+    }
+
     Eigen::Matrix4d extrin;
     // set the intrinsic parameters
     vector<float> intrinsic;

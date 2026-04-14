@@ -237,6 +237,16 @@ void getData(const string lidar_path, const string photo_path, vector<PnPData> &
     string lineStr_lidar;
     string lineStr_photo;
 
+    if (!inFile_lidar.is_open()) {
+        cout << "Error: [getData] Failed to open lidar data file: " << lidar_path << endl;
+        return;
+    }
+
+    if (!inFile_photo.is_open()) {
+        cout << "Error: [getData] Failed to open photo data file: " << photo_path << endl;
+        return;
+    }
+
     while(getline(inFile_lidar, lineStr_lidar) && getline(inFile_photo, lineStr_photo)) {
         if (lineStr_lidar.size() > 10 && lineStr_photo.size() > 10) {  // ignore the index
             PnPData pp;

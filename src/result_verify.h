@@ -18,6 +18,16 @@ void getUVError(const string &intrinsic_path, const string &extrinsic_path, cons
     inFile_lidar.open(lidar_path);
     inFile_photo.open(photo_path);
     string lineStr_lidar;
+
+    if (!inFile_lidar.is_open()) {
+        cout << "Error: Failed to open lidar data file: " << lidar_path << endl;
+        return;
+    }
+    
+    if (!inFile_photo.is_open()) {
+        cout << "Error: Failed to open photo data file: " << photo_path << endl;
+        return;
+    }
     string lineStr_photo;
 
     int count = 0;
@@ -79,8 +89,14 @@ void getUVError(const string &intrinsic_path, const string &extrinsic_path, cons
     inFile_lidar.close();
     inFile_photo.close();
 
-    error[0] = errorTotalU/count;
-    error[1] = errorTotalV/count;
+    if (count == 0) {
+        cout << "No valid data found to calculate error." << endl;
+        error[0] = -1;
+        error[1] = -1;
+    } else {
+        error[0] = errorTotalU/count;
+        error[1] = errorTotalV/count;
+    }
 }
 
 void getUVErrorNewIntrinsic(const string &extrinsic_path, const string &lidar_path, const string &photo_path, float* error, int threshold, const vector<float> &intrinsic) {
@@ -90,6 +106,16 @@ void getUVErrorNewIntrinsic(const string &extrinsic_path, const string &lidar_pa
     inFile_lidar.open(lidar_path);
     inFile_photo.open(photo_path);
     string lineStr_lidar;
+
+    if (!inFile_lidar.is_open()) {
+        cout << "Error: Failed to open lidar data file: " << lidar_path << endl;
+        return;
+    }
+    
+    if (!inFile_photo.is_open()) {
+        cout << "Error: Failed to open photo data file: " << photo_path << endl;
+        return;
+    }
     string lineStr_photo;
 
     int count = 0;
@@ -149,8 +175,14 @@ void getUVErrorNewIntrinsic(const string &extrinsic_path, const string &lidar_pa
     inFile_lidar.close();
     inFile_photo.close();
 
-    error[0] = errorTotalU/count;
-    error[1] = errorTotalV/count;
+    if (count == 0) {
+        cout << "No valid data found to calculate error." << endl;
+        error[0] = -1;
+        error[1] = -1;
+    } else {
+        error[0] = errorTotalU/count;
+        error[1] = errorTotalV/count;
+    }
 }
 
 // calculate theoretical U and V from x,y,z
