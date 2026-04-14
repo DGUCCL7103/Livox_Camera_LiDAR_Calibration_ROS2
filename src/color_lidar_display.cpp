@@ -1,14 +1,17 @@
-#include <ros/ros.h>
-#include <std_msgs/Header.h>
-#include <rosbag/bag.h>
-#include <rosbag/view.h>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/header.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <rosbag2_cpp/reader.hpp>
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/serialized_message.hpp>
+#include <livox_ros_driver2/msg/custom_msg.hpp>
 
 #include <stdio.h>
 #include <cmath>
 #include <hash_map>
 #include <ctime>
 
-#include <nav_msgs/Odometry.h>
+#include <nav_msgs/msg/odometry.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -20,7 +23,6 @@
 #include <opencv2/opencv.hpp>
 
 #include "common.h"
-#include "CustomMsg.h"
 
 using namespace std;
 
@@ -29,26 +31,31 @@ void getColor(const cv::Mat &matrinxIn, const cv::Mat &matrix_out, float x, floa
 void loadPointcloudFromROSBag(const string& bag_path);
 
 typedef pcl::PointXYZRGB PointType;
-vector<livox_ros_driver::CustomMsg> lidar_datas; 
+vector<livox_ros_driver2::msg::CustomMsg> lidar_datas; 
 int threshold_lidar;
 string input_photo_path, input_bag_path, intrinsic_path, extrinsic_path;
 
 void loadPointcloudFromROSBag(const string& bag_path) {
-    ROS_INFO("Start to load the rosbag %s", bag_path.c_str());
-    rosbag::Bag bag;
+    RCLCPP_INFO(rclcpp::get_logger("colorLidar"), "Start to load the rosbag %s", bag_path.c_str());
+    rosbag2_cpp::Reader reader;
     try {
-        bag.open(bag_path, rosbag::bagmode::Read);
-    } catch (rosbag::BagException e) {
-        ROS_ERROR_STREAM("LOADING BAG FAILED: " << e.what());
+        reader.open(bag_path);
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("colorLidar"), "LOADING BAG FAILED: " << e.what());
         return;
     }
 
-    vector<string> types;
-    types.push_back(string("livox_ros_driver/CustomMsg"));  // message title
-    rosbag::View view(bag, rosbag::TypeQuery(types));
-
-    for (const rosbag::MessageInstance& m : view) {
-        livox_ros_driver::CustomMsg livoxCloud = *(m.instantiate<livox_ros_driver::CustomMsg>()); // message type
+    rclcpp::Serialization<livox_ros_driver2::msg::CustomMsg> serialization;
+    while (reader.has_next()) {
+        auto bag_message = reader.read_next();
+        if (bag_message->topic_name != "/livox/lidar") {
+            continue;
+        }
+        
+        livox_ros_driver2::msg::CustomMsg livoxCloud;
+        rclcpp::SerializedMessage extracted_serialized_msg(*bag_message->serialized_data);
+        serialization.deserialize_message(&extracted_serialized_msg, &livoxCloud);
+        
         lidar_datas.push_back(livoxCloud);
         if (lidar_datas.size() > threshold_lidar) {
             break;
@@ -88,35 +95,26 @@ void getColor(const cv::Mat &matrix_in, const cv::Mat &matrix_out, float x, floa
     }
 }
 
-void getParameters() {
+void getParameters(std::shared_ptr<rclcpp::Node> node) {
     cout << "Get the parameters from the launch file" << endl;
 
-    if (!ros::param::get("input_bag_path", input_bag_path)) {
-        cout << "Can not get the value of input_bag_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("input_photo_path", input_photo_path)) {
-        cout << "Can not get the value of input_photo_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("threshold_lidar", threshold_lidar)) {
-        cout << "Can not get the value of threshold_lidar" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("intrinsic_path", intrinsic_path)) {
-        cout << "Can not get the value of intrinsic_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("extrinsic_path", extrinsic_path)) {
-        cout << "Can not get the value o以下程序节点中如果想修改launch文件，需要到src/calibration/launch文件夹中找对应的launch文件。f extrinsic_path" << endl;
-        exit(1);
-    }
+    node->declare_parameter<std::string>("input_bag_path", "");
+    node->declare_parameter<std::string>("input_photo_path", "");
+    node->declare_parameter<int>("threshold_lidar", 0);
+    node->declare_parameter<std::string>("intrinsic_path", "");
+    node->declare_parameter<std::string>("extrinsic_path", "");
+
+    node->get_parameter("input_bag_path", input_bag_path);
+    node->get_parameter("input_photo_path", input_photo_path);
+    node->get_parameter("threshold_lidar", threshold_lidar);
+    node->get_parameter("intrinsic_path", intrinsic_path);
+    node->get_parameter("extrinsic_path", extrinsic_path);
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "colorLidar");
-    ros::NodeHandle n;
-    getParameters();
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("colorLidar");
+    getParameters(node);
 
     cv::Mat src_img = cv::imread(input_photo_path);
     
@@ -172,7 +170,7 @@ int main(int argc, char **argv) {
     }
     
     // read photo and get all RGB information into color_vector
-    ROS_INFO("Start to read the photo ");
+    RCLCPP_INFO(node->get_logger(), "Start to read the photo ");
     for (int v = 0; v < row; ++v) {
         for (int u = 0; u < col; ++u) {
             // for .bmp photo, the 3 channels are BGR
@@ -181,17 +179,17 @@ int main(int argc, char **argv) {
             color_vector[v*col + u][2] = src_img.at<cv::Vec3b>(v, u)[0];
         }
     }
-    ROS_INFO("Finish saving the data ");
+    RCLCPP_INFO(node->get_logger(), "Finish saving the data ");
     
     loadPointcloudFromROSBag(input_bag_path);
 
-    ros::Publisher pub = n.advertise<sensor_msgs::PointCloud2>("color_lidar", 10);
-    ros::Rate loop_rate(20); // frequence 20 Hz
+    auto pub = node->create_publisher<sensor_msgs::msg::PointCloud2>("color_lidar", 10);
+    rclcpp::Rate loop_rate(20); // frequence 20 Hz
     
-    ROS_INFO("Start to publish the point cloud");
+    RCLCPP_INFO(node->get_logger(), "Start to publish the point cloud");
     uint64_t num = 0;
-    while(n.ok()) {
-        ros::spinOnce();
+    while(rclcpp::ok()) {
+        rclcpp::spin_some(node);
         
         if(num < lidar_datas.size()) {
             pcl::PointCloud<PointType>::Ptr cloud(new pcl::PointCloud<PointType>);
@@ -228,11 +226,11 @@ int main(int argc, char **argv) {
 
             }
             // once lidar_datas receive something new, it will transform it into a ROS cloud type
-            sensor_msgs::PointCloud2 output;
+            sensor_msgs::msg::PointCloud2 output;
             pcl::toROSMsg(*cloud, output);
 
             output.header.frame_id = "livox_frame"; 
-            pub.publish(output); // publish the cloud point to rviz
+            pub->publish(output); // publish the cloud point to rviz
             loop_rate.sleep();
             ++num;
 
@@ -241,14 +239,10 @@ int main(int argc, char **argv) {
         else if(num >= 10) {
             lidar_datas.clear();
             num = 0;
-            ROS_INFO("Finish all the process");
+            RCLCPP_INFO(node->get_logger(), "Finish all the process");
             break;
         }
     }
-    
+    rclcpp::shutdown();
     return 0;
 }
-
-
-
-

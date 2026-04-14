@@ -2,14 +2,15 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <ros/ros.h>
-#include <std_msgs/Header.h>
-#include <rosbag/bag.h>
-#include <rosbag/view.h>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/header.hpp>
+#include <rosbag2_cpp/reader.hpp>
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/serialized_message.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <time.h>
 
-#include "CustomMsg.h"
+#include <livox_ros_driver2/msg/custom_msg.hpp>
 #include "common.h"
 
 using namespace std;
@@ -21,7 +22,7 @@ struct pointData{
     int i;
 };
 vector<pointData> vector_data;
-livox_ros_driver::CustomMsg livox_cloud;
+livox_ros_driver2::msg::CustomMsg livox_cloud;
 string input_bag_path, output_path;
 int threshold_lidar, data_num;
 
@@ -38,23 +39,27 @@ void loadAndSavePointcloud(int index) {
         cout << "File " << path << " does not exit" << endl;
         return;
     }
-    ROS_INFO("Start to load the rosbag %s", path.c_str());
-    rosbag::Bag bag;
+    RCLCPP_INFO(rclcpp::get_logger("pcdTransfer"), "Start to load the rosbag %s", path.c_str());
+    rosbag2_cpp::Reader reader;
     try {
-        bag.open(path, rosbag::bagmode::Read);
-    } catch (rosbag::BagException e) {
-        ROS_ERROR_STREAM("LOADING BAG FAILED: " << e.what());
+        reader.open(path);
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("pcdTransfer"), "LOADING BAG FAILED: " << e.what());
         return;
     }
 
-    vector<string> types;
-    types.push_back(string("livox_ros_driver/CustomMsg")); 
-    rosbag::View view(bag, rosbag::TypeQuery(types));
-
+    rclcpp::Serialization<livox_ros_driver2::msg::CustomMsg> serialization;
     int cloudCount = 0;
-    for (const rosbag::MessageInstance& m : view) {
-        livox_cloud = *(m.instantiate<livox_ros_driver::CustomMsg>()); // message type
-
+    while (reader.has_next()) {
+        auto bag_message = reader.read_next();
+        
+        if (bag_message->topic_name != "/livox/lidar") {
+            continue;
+        }
+        
+        rclcpp::SerializedMessage extracted_serialized_msg(*bag_message->serialized_data);
+        serialization.deserialize_message(&extracted_serialized_msg, &livox_cloud);
+        
         for(uint i = 0; i < livox_cloud.point_num; ++i) {
             pointData myPoint;
             myPoint.x = livox_cloud.points[i].x;
@@ -114,38 +119,31 @@ void dataSave(int index) {
     writePointCloud(outputName, vector_data);
 }
 
-void getParameters() {
+void getParameters(std::shared_ptr<rclcpp::Node> node) {
     cout << "Get the parameters from the launch file" << endl;
 
-    if (!ros::param::get("input_bag_path", input_bag_path)) {
-        cout << "Can not get the value of input_bag_path" << endl;
-        exit(1);
-    }
-    else {
-        cout << input_bag_path << endl;
-    }
-    if (!ros::param::get("output_pcd_path", output_path)) {
-        cout << "Can not get the value of output_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("threshold_lidar", threshold_lidar)) {
-        cout << "Can not get the value of threshold_lidar" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("data_num", data_num)) {
-        cout << "Can not get the value of data_num" << endl;
-        exit(1);
-    }
+    node->declare_parameter<std::string>("input_bag_path", "");
+    node->declare_parameter<std::string>("output_pcd_path", "");
+    node->declare_parameter<int>("threshold_lidar", 0);
+    node->declare_parameter<int>("data_num", 0);
+
+    node->get_parameter("input_bag_path", input_bag_path);
+    node->get_parameter("output_pcd_path", output_path);
+    node->get_parameter("threshold_lidar", threshold_lidar);
+    node->get_parameter("data_num", data_num);
+    
+    cout << input_bag_path << endl;
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "pcdTransfer");
-    getParameters();
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("pcdTransfer");
+    getParameters(node);
 
     for (int i = 0; i < data_num; ++i) {
         loadAndSavePointcloud(i);
     }
-    ROS_INFO("Finish all!");
+    RCLCPP_INFO(node->get_logger(), "Finish all!");
+    rclcpp::shutdown();
     return 0;
 }
-

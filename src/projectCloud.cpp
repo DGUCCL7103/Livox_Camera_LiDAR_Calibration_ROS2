@@ -1,4 +1,4 @@
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <image_transport/image_transport.h>
 #include <opencv2/highgui/highgui.hpp>
 #include <cv_bridge/cv_bridge.h>
@@ -10,12 +10,13 @@
 #include <string>
 #include <vector>
 
-#include <rosbag/bag.h>
-#include <rosbag/view.h>
+#include <rosbag2_cpp/reader.hpp>
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/serialized_message.hpp>
+#include <livox_ros_driver2/msg/custom_msg.hpp>
 
 #include "common.h"
 #include "result_verify.h"
-#include "CustomMsg.h"
 
 using namespace std;
 using namespace cv;
@@ -28,26 +29,31 @@ float min_depth = 3;
 
 cv::Mat src_img;
 
-vector<livox_ros_driver::CustomMsg> lidar_datas; 
+vector<livox_ros_driver2::msg::CustomMsg> lidar_datas; 
 int threshold_lidar;  // number of cloud point on the photo
 string input_bag_path, input_photo_path, output_path, intrinsic_path, extrinsic_path;
 
 void loadPointcloudFromROSBag(const string& bag_path) {
-    ROS_INFO("Start to load the rosbag %s", bag_path.c_str());
-    rosbag::Bag bag;
+    RCLCPP_INFO(rclcpp::get_logger("projectCloud"), "Start to load the rosbag %s", bag_path.c_str());
+    rosbag2_cpp::Reader reader;
     try {
-        bag.open(bag_path, rosbag::bagmode::Read);
-    } catch (rosbag::BagException e) {
-        ROS_ERROR_STREAM("LOADING BAG FAILED: " << e.what());
+        reader.open(bag_path);
+    } catch (const std::exception& e) {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("projectCloud"), "LOADING BAG FAILED: " << e.what());
         return;
     }
 
-    vector<string> types;
-    types.push_back(string("livox_ros_driver/CustomMsg"));  // message title
-    rosbag::View view(bag, rosbag::TypeQuery(types));
-
-    for (const rosbag::MessageInstance& m : view) {
-        livox_ros_driver::CustomMsg livoxCloud = *(m.instantiate<livox_ros_driver::CustomMsg>()); // message type
+    rclcpp::Serialization<livox_ros_driver2::msg::CustomMsg> serialization;
+    while (reader.has_next()) {
+        auto bag_message = reader.read_next();
+        if (bag_message->topic_name != "/livox/lidar") {
+            continue;
+        }
+        
+        livox_ros_driver2::msg::CustomMsg livoxCloud;
+        rclcpp::SerializedMessage extracted_serialized_msg(*bag_message->serialized_data);
+        serialization.deserialize_message(&extracted_serialized_msg, &livoxCloud);
+        
         lidar_datas.push_back(livoxCloud);
         if (lidar_datas.size() > (threshold_lidar/24000 + 1)) {
             break;
@@ -96,38 +102,28 @@ void getColor(int &result_r, int &result_g, int &result_b, float cur_depth) {
 
 }
 
-void getParameters() {
+void getParameters(std::shared_ptr<rclcpp::Node> node) {
     cout << "Get the parameters from the launch file" << endl;
 
-    if (!ros::param::get("input_bag_path", input_bag_path)) {
-        cout << "Can not get the value of input_bag_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("input_photo_path", input_photo_path)) {
-        cout << "Can not get the value of input_photo_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("output_path", output_path)) {
-        cout << "Can not get the value of output_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("threshold_lidar", threshold_lidar)) {
-        cout << "Can not get the value of threshold_lidar" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("intrinsic_path", intrinsic_path)) {
-        cout << "Can not get the value of intrinsic_path" << endl;
-        exit(1);
-    }
-    if (!ros::param::get("extrinsic_path", extrinsic_path)) {
-        cout << "Can not get the value of extrinsic_path" << endl;
-        exit(1);
-    }
+    node->declare_parameter<std::string>("input_bag_path", "");
+    node->declare_parameter<std::string>("input_photo_path", "");
+    node->declare_parameter<std::string>("output_path", "");
+    node->declare_parameter<int>("threshold_lidar", 0);
+    node->declare_parameter<std::string>("intrinsic_path", "");
+    node->declare_parameter<std::string>("extrinsic_path", "");
+
+    node->get_parameter("input_bag_path", input_bag_path);
+    node->get_parameter("input_photo_path", input_photo_path);
+    node->get_parameter("output_path", output_path);
+    node->get_parameter("threshold_lidar", threshold_lidar);
+    node->get_parameter("intrinsic_path", intrinsic_path);
+    node->get_parameter("extrinsic_path", extrinsic_path);
 }
 
 int main(int argc, char **argv) {
-    ros::init(argc, argv, "projectCloud");
-    getParameters();
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("projectCloud");
+    getParameters(node);
 
     src_img = cv::imread(input_photo_path);
 
@@ -160,7 +156,7 @@ int main(int argc, char **argv) {
     distCoeffs.at<double>(3, 0) = distortion[3];
     distCoeffs.at<double>(4, 0) = distortion[4];
 
-    ROS_INFO("Start to project the lidar cloud");
+    RCLCPP_INFO(node->get_logger(), "Start to project the lidar cloud");
     float x, y, z;
     float theoryUV[2] = {0, 0};
     int myCount = 0;
@@ -187,7 +183,7 @@ int main(int argc, char **argv) {
             break;
         }
     }
-    ROS_INFO("Show and save the picture, tap any key to close the photo");
+    RCLCPP_INFO(node->get_logger(), "Show and save the picture, tap any key to close the photo");
 
     cv::Mat view, rview, map1, map2;
     cv::Size imageSize = src_img.size();
@@ -198,8 +194,6 @@ int main(int argc, char **argv) {
     cv::imshow("source", src_img);
     cv::waitKey(0);
     cv::imwrite(output_path, src_img);
+    rclcpp::shutdown();
     return 0;
 }
-
-
-
