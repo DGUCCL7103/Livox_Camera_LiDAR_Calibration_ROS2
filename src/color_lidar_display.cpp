@@ -8,7 +8,6 @@
 
 #include <stdio.h>
 #include <cmath>
-#include <hash_map>
 #include <ctime>
 
 #include <nav_msgs/msg/odometry.hpp>
@@ -57,7 +56,7 @@ void loadPointcloudFromROSBag(const string& bag_path) {
         serialization.deserialize_message(&extracted_serialized_msg, &livoxCloud);
         
         lidar_datas.push_back(livoxCloud);
-        if (lidar_datas.size() > threshold_lidar) {
+        if (lidar_datas.size() > static_cast<size_t>(threshold_lidar)) {
             break;
         }
     }

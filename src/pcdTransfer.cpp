@@ -97,7 +97,7 @@ void writeTitle(const string filename, unsigned long point_num) {
         outfile << "POINTS " << long2str(point_num) << endl;
         outfile << "DATA ascii" << endl;
     }
-    ROS_INFO("Save file %s", filename.c_str());
+    RCLCPP_INFO(rclcpp::get_logger("pcdTransfer"), "Save file %s", filename.c_str());
 }
 
 void writePointCloud(const string filename, const vector<pointData> singlePCD) {

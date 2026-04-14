@@ -1,5 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
-#include <image_transport/image_transport.h>
+#include <image_transport/image_transport.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <stdio.h>
@@ -55,7 +55,7 @@ void loadPointcloudFromROSBag(const string& bag_path) {
         serialization.deserialize_message(&extracted_serialized_msg, &livoxCloud);
         
         lidar_datas.push_back(livoxCloud);
-        if (lidar_datas.size() > (threshold_lidar/24000 + 1)) {
+        if (lidar_datas.size() > static_cast<size_t>(threshold_lidar / 24000 + 1)) {
             break;
         }
     }
